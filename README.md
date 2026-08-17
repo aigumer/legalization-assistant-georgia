@@ -20,6 +20,14 @@ General-purpose chatbots answer these questions from half-remembered blog posts 
 invent article numbers. This project constrains the model to a specific corpus and
 shows the source text next to every answer, so the user can check it.
 
+## How it looks like
+
+Main page with chat and settings:
+<img width="1489" height="1077" alt="image" src="https://github.com/user-attachments/assets/3585c902-3c57-427f-bd28-e632434a1e90" />
+
+Sources which used for answer:
+<img width="701" height="952" alt="image" src="https://github.com/user-attachments/assets/d37bcd94-66d4-4696-871c-08b0edc3fd3d" />
+
 ## Data
 
 | | |
