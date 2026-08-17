@@ -1,10 +1,9 @@
 """The RAG flow: retrieve article chunks, then answer strictly from them."""
 
-from __future__ import annotations
-
 import os
 import re
 from collections.abc import Iterator
+from functools import lru_cache
 
 import groq
 
@@ -88,7 +87,6 @@ def trim_history(history: list[dict], budget_chars: int = MAX_HISTORY_CHARS) -> 
             break
         kept.append(message)
     kept.reverse()
-    # A leading assistant turn is an answer whose question was just dropped.
     if kept and kept[0]["role"] != "user":
         kept.pop(0)
     return kept
@@ -139,7 +137,7 @@ def prepare_query(question: str, translate: bool = True) -> str:
     if not translate or not NON_LATIN_RE.search(question):
         return question
     try:
-        response = _client().chat.completions.create(
+        response = get_client().chat.completions.create(
             model=TRANSLATION_MODEL,
             max_completion_tokens=500,
             reasoning_effort="low",
@@ -155,7 +153,14 @@ def prepare_query(question: str, translate: bool = True) -> str:
         raise RuntimeError(
             f"Could not translate the question into English for search: {error}"
         ) from error
-    translated = response.choices[0].message.content or ""
+    choice = response.choices[0]
+    if choice.finish_reason == "length":
+        raise RuntimeError(
+            "Could not translate the question into English for search: the "
+            "translation model ran out of its token budget before producing "
+            "any output."
+        )
+    translated = choice.message.content or ""
     return translated.strip() or question
 
 
@@ -170,8 +175,6 @@ def retrieve(
     results = get_search().search(
         query, num_results=num_results, boosts=boosts, doc_id=doc_id
     )
-    # Trim here rather than at prompt assembly, so the excerpts shown in the UI
-    # are exactly the ones the answer was grounded in.
     return fit_context(results)
 
 
@@ -201,8 +204,13 @@ CREDENTIALS_HELP = (
 )
 
 
-def _client() -> groq.Groq:
-    """An authenticated client, or a clear error about credentials."""
+@lru_cache(maxsize=1)
+def get_client() -> groq.Groq:
+    """The process-wide client, or a clear error about credentials.
+
+    A missing key raises rather than being cached, so setting the key later in
+    the same process is picked up on the next call.
+    """
     if not os.getenv("GROQ_API_KEY"):
         raise RuntimeError(CREDENTIALS_HELP)
     return groq.Groq()
@@ -231,7 +239,7 @@ def stream_answer(
     deltas need no filtering.
     """
     try:
-        stream = _client().chat.completions.create(
+        stream = get_client().chat.completions.create(
             model=model,
             max_completion_tokens=MAX_TOKENS,
             reasoning_effort=REASONING_EFFORT,

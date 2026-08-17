@@ -1,7 +1,5 @@
 """Keyword retrieval over the chunk corpus, backed by minsearch."""
 
-from __future__ import annotations
-
 import re
 from functools import lru_cache
 
@@ -73,7 +71,6 @@ class LegalSearch:
     ) -> list[dict]:
         if not query.strip():
             return []
-        # Parts of one article all score alike, so over-fetch and cap below.
         results = self.index.search(
             expand_query(query),
             filter_dict={"doc_id": doc_id} if doc_id else {},

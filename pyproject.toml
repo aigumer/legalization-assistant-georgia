@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "ipykernel>=7.3.0",
     "pypdf>=6.16.1",
+    "pytest>=9.1.1",
     "ruff>=0.16.3",
 ]
 

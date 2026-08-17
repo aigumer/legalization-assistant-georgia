@@ -1,9 +1,7 @@
-"""Ask a question from the terminal, without starting the Streamlit app.
+"""Ask a question from the terminal, without starting the streamlit.
 
-    uv run python scripts/ask.py "How long is a residence permit valid?"
+    uv run python scripts/ask.py "question"
 """
-
-from __future__ import annotations
 
 import argparse
 

@@ -1,13 +1,7 @@
-"""Turn the source PDFs in ``data/raw`` into retrievable, citable chunks.
-
+"""Turn the source PDFs in ``data/raw`` into retrievable chunks.
 The corpus is Georgian legislation, which is already organised as
-Section -> Chapter -> Article. That hierarchy is the chunking unit: one chunk per
-article (split further only when an article is very long), carrying its section
-and chapter as metadata so answers can cite "Article 15 - Types of residence
-permits" rather than an anonymous passage.
+Section -> Chapter -> Article. 
 """
-
-from __future__ import annotations
 
 import json
 import re
@@ -23,12 +17,8 @@ from .config import CHUNKS_PATH, MAX_CHUNK_CHARS, RAW_DIR
 DASH = r"[\u2013\u2014-]"
 SUPERSCRIPTS = r"[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]"
 
-# "Section II", with the section title on the following line.
 SECTION_RE = re.compile(r"^Section\s+([IVXLC]+)\s*$")
-# "Chapter III - Georgian Visa", or a bare "Chapter XV" with the title below it.
 CHAPTER_RE = re.compile(rf"^Chapter\s+([IVXLC]+\d*)\s*(?:{DASH}\s*(.+))?$")
-# "Article 4 - Entry into Georgia". The dash is required: it is what separates a
-# real heading from body text such as "Article 15(k) of this Law shall be ...".
 ARTICLE_RE = re.compile(rf"^Article\s+(\d+{SUPERSCRIPTS}*)\s*{DASH}\s*(.+)$")
 
 SUPERSCRIPT_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
@@ -36,13 +26,9 @@ SUPERSCRIPT_TO_ASCII = {
     ord(c): f"-{d}" for d, c in zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹", strict=True)
 }
 
-# Amendment trail printed under each amended article by the official publisher.
 AMENDMENT_RE = re.compile(r"^(?:Law|Decree|Decision|Judgment|Resolution|Order)\b.*\bwebsite\b")
-# Page furniture: the publisher URL and the document registration number.
 FOOTER_RE = re.compile(r"^(?:https?://\S+|\d{10,})$")
 
-# A new logical paragraph starts at "1." / "a)" / "a1)"; every other line is a
-# hard wrap continuing the one above.
 PARAGRAPH_START_RE = re.compile(r"^(?:\d+\s*\d*\.|[a-z]\d?\)|[a-z]\d?\.)\s")
 
 
@@ -62,13 +48,6 @@ class Chunk:
     part: int = 1
     n_parts: int = 1
     amendments: list[str] = field(default_factory=list)
-
-    @property
-    def citation(self) -> str:
-        label = f"{self.article} - {self.title}" if self.title else self.article
-        if self.n_parts > 1:
-            label += f" (part {self.part}/{self.n_parts})"
-        return label
 
 
 SUPERSCRIPT_FLAG = 1  # bit 0 of a span's `flags` marks superscript text

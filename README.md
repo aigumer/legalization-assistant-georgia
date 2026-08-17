@@ -94,7 +94,11 @@ fixed ceiling instead of growing until the quota rejects it.
 
 Retrieval sets the ceiling on answer quality, so it is measured directly.
 `data/ground_truth_seed.csv` holds 35 hand-written question → article pairs;
-`scripts/generate_ground_truth.py` builds a larger set with an LLM.
+`scripts/generate_ground_truth.py` builds a larger set with an LLM, writing
+`question,doc_id,article` rows as it goes so a rate limit part-way through costs
+only the remaining articles. Scoring matches on `doc_id` when the column is
+present, so once a second law is indexed its `Article 15` cannot be counted as a
+hit for the first law's.
 
 ```bash
 uv run python scripts/evaluate_retrieval.py --sweep
@@ -126,16 +130,6 @@ uv run streamlit run app.py
 ```
 
 `prepare_data.py` is optional — the corpus is built on first use if it is missing.
-
-**On Groq's free tier**, the limit is 8,000 tokens per minute, and `max_completion_tokens`
-counts against it in full whether or not the model uses them. Every other limit is
-derived from that one in `config.py`: the answer budget (`MAX_TOKENS`), the history cap
-(`MAX_HISTORY_CHARS`), and what is left for excerpts (`MAX_CONTEXT_CHARS`). Retrieval
-returns as many excerpts as fit that remainder — ask for ten short ones and you get
-ten, ask for ten long ones and the weakest are dropped rather than the request being
-rejected. Worst case, a request bills ~7,700 of the 8,000 tokens. Asking several
-questions inside one minute can still hit the limit; the app reports that clearly
-instead of failing with a stack trace.
 
 Ask a single question without the UI:
 
@@ -174,9 +168,6 @@ data/
 - **One law indexed.** It covers entry, visas, residence permits, rights and duties,
   and expulsion, but not the government ordinances that carry much of the day-to-day
   detail (visa fee schedules, country lists, application forms).
-- **Keyword retrieval.** minsearch is TF-IDF; a question with no lexical overlap with
-  the statute can miss. The synonym map patches the common cases by hand, but it is a
-  hand-maintained list — `minsearch.VectorSearch` would be the real fix.
 - **Point-in-time text.** The PDF is a snapshot; the law changes. Amendment dates are
   shown so a stale answer is at least visible as stale.
 - Not legal advice. Confirm anything consequential with the Public Service Development

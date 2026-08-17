@@ -1,30 +1,21 @@
 """Score retrieval against a ground-truth set of question -> article pairs.
-
-Retrieval is the ceiling on answer quality: if the right article never reaches
-the prompt, no amount of prompting recovers it. This measures two things:
-
-  hit rate @k  - how often the expected article appears in the top k results
-  MRR @k       - how highly it ranks when it does (1/rank, averaged)
-
     uv run python scripts/evaluate_retrieval.py
     uv run python scripts/evaluate_retrieval.py --sweep
 """
-
-from __future__ import annotations
 
 import argparse
 import csv
 from pathlib import Path
 
 from legalization_assistant.config import (
+    DATA_DIR,
     DEFAULT_BOOSTS,
     DEFAULT_NUM_RESULTS,
     GROUND_TRUTH_PATH,
-    PROJECT_ROOT,
 )
 from legalization_assistant.search import get_search
 
-SEED_PATH = PROJECT_ROOT / "data" / "ground_truth_seed.csv"
+SEED_PATH = DATA_DIR / "ground_truth_seed.csv"
 
 # Boost configurations compared by --sweep, to show what the defaults buy.
 BOOST_VARIANTS: dict[str, dict[str, float] | None] = {
@@ -53,10 +44,18 @@ def evaluate(
     for row in ground_truth:
         # Scored without the LLM translation step: this measures the index.
         results = search.search(row["question"], num_results=num_results, boosts=boosts)
-        articles = [result["article"] for result in results]
-        if row["article"] in articles:
+        # Match on the document too when the ground truth names one, so another
+        # law's "Article 15" cannot be counted as a hit. The hand-written seed
+        # set predates the column and omits it.
+        expected_doc = row.get("doc_id")
+        found = [
+            (result["article"], result["doc_id"] if expected_doc else None)
+            for result in results
+        ]
+        expected = (row["article"], expected_doc or None)
+        if expected in found:
             hits += 1
-            reciprocal_ranks += 1.0 / (articles.index(row["article"]) + 1)
+            reciprocal_ranks += 1.0 / (found.index(expected) + 1)
 
     total = len(ground_truth) or 1
     return hits / total, reciprocal_ranks / total

@@ -1,17 +1,5 @@
 """Generate an evaluation set by asking the model what each article answers.
-
-The seed set in ``data/ground_truth_seed.csv`` is hand-written and small. This
-builds a larger one automatically: for each article, generate questions a person
-would realistically ask that the article answers, and record the article as the
-expected result.
-
-    uv run python scripts/generate_ground_truth.py --questions-per-article 3
-
-Requires GROQ_API_KEY. Output goes to data/processed/ground_truth.csv, which
-scripts/evaluate_retrieval.py picks up automatically once it exists.
 """
-
-from __future__ import annotations
 
 import argparse
 import csv
@@ -22,7 +10,7 @@ import groq
 
 from legalization_assistant.config import GROUND_TRUTH_PATH, MODEL
 from legalization_assistant.ingest import load_corpus
-from legalization_assistant.rag import _client
+from legalization_assistant.rag import get_client
 
 SYSTEM_PROMPT = """\
 You write evaluation questions for a search engine over Georgian immigration law.
@@ -83,27 +71,36 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=GROUND_TRUTH_PATH)
     args = parser.parse_args()
 
-    documents: dict[str, dict] = {}
+    documents: dict[tuple[str, str], dict] = {}
     for document in load_corpus():
-        documents.setdefault(document["article"], document)
+        documents.setdefault((document["doc_id"], document["article"]), document)
 
     articles = list(documents.values())[: args.limit]
-    client = _client()
-
-    rows: list[tuple[str, str]] = []
-    for position, document in enumerate(articles, start=1):
-        print(f"[{position}/{len(articles)}] {document['article']} - {document['title'][:50]}")
-        for question in generate_for_article(
-            client, document, args.questions_per_article, args.model
-        ):
-            rows.append((question, document["article"]))
+    client = get_client()
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
+    written = 0
+
     with args.output.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.writer(handle)
-        writer.writerow(["question", "article"])
-        writer.writerows(rows)
-    print(f"\nWrote {len(rows)} questions to {args.output}")
+        writer.writerow(["question", "doc_id", "article"])
+        for position, document in enumerate(articles, start=1):
+            print(
+                f"[{position}/{len(articles)}] {document['article']} - "
+                f"{document['title'][:50]}"
+            )
+            try:
+                questions = generate_for_article(
+                    client, document, args.questions_per_article, args.model
+                )
+            except groq.GroqError as error:
+                print(f"  ! stopping after {written} questions: {error}")
+                break
+            for question in questions:
+                writer.writerow([question, document["doc_id"], document["article"]])
+                written += 1
+            handle.flush()
+    print(f"\nWrote {written} questions to {args.output}")
 
 
 if __name__ == "__main__":

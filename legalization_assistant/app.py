@@ -1,7 +1,5 @@
 """Streamlit chat frontend for the legalization assistant."""
 
-from __future__ import annotations
-
 import streamlit as st
 
 from .config import DEFAULT_NUM_RESULTS, MODEL
@@ -16,11 +14,6 @@ EXAMPLE_QUESTIONS = [
 ]
 
 st.set_page_config(page_title="Georgia Visa & Legalization Assistant", page_icon="🇬🇪")
-
-
-@st.cache_resource(show_spinner="Building the search index...")
-def load_index():
-    return get_search()
 
 
 def render_sources(sources: list[dict]) -> None:
@@ -48,7 +41,10 @@ def render_sources(sources: list[dict]) -> None:
 
 
 def main() -> None:
-    index = load_index()
+    # get_search caches the index process-wide, so the spinner shows only while
+    # the first run actually builds it.
+    with st.spinner("Building the search index..."):
+        index = get_search()
 
     st.title("🇬🇪 Georgia Visa & Legalization Assistant")
     st.caption(
