@@ -172,9 +172,7 @@ def retrieve(
     translate: bool = True,
 ) -> list[dict]:
     query = prepare_query(question, translate=translate)
-    results = get_search().search(
-        query, num_results=num_results, boosts=boosts, doc_id=doc_id
-    )
+    results = get_search().search(query, num_results=num_results, boosts=boosts, doc_id=doc_id)
     return fit_context(results)
 
 

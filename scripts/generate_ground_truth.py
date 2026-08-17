@@ -1,4 +1,7 @@
 """Generate an evaluation set by asking the model what each article answers.
+
+Usage:
+    uv run python scripts/generate_ground_truth.py --questions-per-article 3
 """
 
 import argparse
@@ -32,9 +35,7 @@ Chapter: {chapter}
 Write exactly {count} questions."""
 
 
-def generate_for_article(
-    client: groq.Groq, document: dict, count: int, model: str
-) -> list[str]:
+def generate_for_article(client: groq.Groq, document: dict, count: int, model: str) -> list[str]:
     response = client.chat.completions.create(
         model=model,
         max_completion_tokens=2000,
@@ -64,7 +65,9 @@ def generate_for_article(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--questions-per-article", type=int, default=3)
     parser.add_argument("--model", default=MODEL, help="Generation model.")
     parser.add_argument("--limit", type=int, default=None, help="Only the first N articles.")
@@ -85,10 +88,7 @@ def main() -> None:
         writer = csv.writer(handle)
         writer.writerow(["question", "doc_id", "article"])
         for position, document in enumerate(articles, start=1):
-            print(
-                f"[{position}/{len(articles)}] {document['article']} - "
-                f"{document['title'][:50]}"
-            )
+            print(f"[{position}/{len(articles)}] {document['article']} - {document['title'][:50]}")
             try:
                 questions = generate_for_article(
                     client, document, args.questions_per_article, args.model

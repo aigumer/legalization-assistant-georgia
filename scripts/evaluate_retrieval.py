@@ -1,4 +1,6 @@
 """Score retrieval against a ground-truth set of question -> article pairs.
+
+Usage:
     uv run python scripts/evaluate_retrieval.py
     uv run python scripts/evaluate_retrieval.py --sweep
 """
@@ -49,8 +51,7 @@ def evaluate(
         # set predates the column and omits it.
         expected_doc = row.get("doc_id")
         found = [
-            (result["article"], result["doc_id"] if expected_doc else None)
-            for result in results
+            (result["article"], result["doc_id"] if expected_doc else None) for result in results
         ]
         expected = (row["article"], expected_doc or None)
         if expected in found:
@@ -62,7 +63,9 @@ def evaluate(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--ground-truth",
         type=Path,

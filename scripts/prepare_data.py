@@ -1,5 +1,6 @@
 """Parse every PDF in data/raw into the chunk corpus used by the search index.
 
+Usage:
     uv run python scripts/prepare_data.py
 """
 

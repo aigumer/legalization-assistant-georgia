@@ -55,7 +55,9 @@ Three things on top of a plain index, all of which came out of measurement:
   `MAX_PARTS_PER_ARTICLE` (2) parts of the same article may occupy results; the search
   over-fetches and filters.
 - **Statutory synonyms.** The law says *expulsion*, never *deportation*; *alien*, never
-  *foreigner*; *visa categories*, never *visa types*. 
+  *foreigner*; *visa categories*, never *visa types*. A keyword index cannot bridge that,
+  so everyday terms have their statutory equivalent appended to the query
+  (`STATUTORY_SYNONYMS` in `search.py`).
 
 Questions in a non-Latin script (Russian, Georgian) cannot match an English index at
 all, so they are first rewritten into English search terms by `gpt-oss-20b`.
@@ -168,6 +170,7 @@ scripts/
 data/
   raw/                     source PDFs
   ground_truth_seed.csv    hand-written evaluation set
+tests/                     parser tests
 Dockerfile                 app image, corpus baked in at build time
 docker-compose.yml         app service + `tools`-profile one-shots
 ```

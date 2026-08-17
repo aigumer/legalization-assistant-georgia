@@ -138,9 +138,7 @@ def main() -> None:
             return
         render_sources(sources)
 
-    st.session_state.messages.append(
-        {"role": "assistant", "content": answer, "sources": sources}
-    )
+    st.session_state.messages.append({"role": "assistant", "content": answer, "sources": sources})
 
 
 if __name__ == "__main__":

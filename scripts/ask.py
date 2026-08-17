@@ -1,5 +1,6 @@
-"""Ask a question from the terminal, without starting the streamlit.
+"""Ask a question from the terminal, without starting Streamlit.
 
+Usage:
     uv run python scripts/ask.py "question"
 """
 
@@ -10,7 +11,9 @@ from legalization_assistant.rag import retrieve, stream_answer
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("question")
     parser.add_argument("-k", "--num-results", type=int, default=DEFAULT_NUM_RESULTS)
     parser.add_argument(
@@ -18,9 +21,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    sources = retrieve(
-        args.question, num_results=args.num_results, translate=not args.no_translate
-    )
+    sources = retrieve(args.question, num_results=args.num_results, translate=not args.no_translate)
     print("Retrieved:")
     for source in sources:
         print(f"  - {source['article']} - {source['title']}")

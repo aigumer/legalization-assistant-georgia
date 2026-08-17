@@ -1,6 +1,7 @@
 """Turn the source PDFs in ``data/raw`` into retrievable chunks.
+
 The corpus is Georgian legislation, which is already organised as
-Section -> Chapter -> Article. 
+Section -> Chapter -> Article, so that structure becomes the chunk boundary.
 """
 
 import json
@@ -22,9 +23,7 @@ CHAPTER_RE = re.compile(rf"^Chapter\s+([IVXLC]+\d*)\s*(?:{DASH}\s*(.+))?$")
 ARTICLE_RE = re.compile(rf"^Article\s+(\d+{SUPERSCRIPTS}*)\s*{DASH}\s*(.+)$")
 
 SUPERSCRIPT_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
-SUPERSCRIPT_TO_ASCII = {
-    ord(c): f"-{d}" for d, c in zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹", strict=True)
-}
+SUPERSCRIPT_TO_ASCII = {ord(c): f"-{d}" for d, c in zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹", strict=True)}
 
 AMENDMENT_RE = re.compile(r"^(?:Law|Decree|Decision|Judgment|Resolution|Order)\b.*\bwebsite\b")
 FOOTER_RE = re.compile(r"^(?:https?://\S+|\d{10,})$")
@@ -92,9 +91,7 @@ def _join_paragraphs(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
     return paragraphs
 
 
-def _split_parts(
-    paragraphs: list[tuple[int, str]], max_chars: int
-) -> list[tuple[int, str]]:
+def _split_parts(paragraphs: list[tuple[int, str]], max_chars: int) -> list[tuple[int, str]]:
     """Group paragraphs into parts of at most ``max_chars``, never splitting one.
 
     Long articles run across pages, so each part reports the page its own text

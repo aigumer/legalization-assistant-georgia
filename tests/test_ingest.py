@@ -1,5 +1,4 @@
-"""Parser tests, built around the ways it can fail silently.
-"""
+"""Parser tests, built around the ways it can fail silently."""
 
 import pymupdf
 import pytest
@@ -120,9 +119,7 @@ class TestParseDocument:
             ],
         )
         (chunk,) = parse_document(pdf)
-        assert chunk.amendments == [
-            "Law of Georgia No 1803 of 25 June 2026 - website, 05.07.2026"
-        ]
+        assert chunk.amendments == ["Law of Georgia No 1803 of 25 June 2026 - website, 05.07.2026"]
         assert "No 1803" not in chunk.text
 
     def test_superscript_article_gets_ascii_slug(self, tmp_path):
