@@ -18,25 +18,31 @@ import pymupdf
 
 from .config import CHUNKS_PATH, MAX_CHUNK_CHARS, RAW_DIR
 
+# Headings separate number from title with an en, em, or plain dash. Amending
+# laws number inserted articles with a superscript: "Article 20¹".
+DASH = r"[\u2013\u2014-]"
+SUPERSCRIPTS = r"[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]"
+
 # "Section II", with the section title on the following line.
 SECTION_RE = re.compile(r"^Section\s+([IVXLC]+)\s*$")
 # "Chapter III - Georgian Visa", or a bare "Chapter XV" with the title below it.
-CHAPTER_RE = re.compile(r"^Chapter\s+([IVXLC]+\d*)\s*(?:[–—-]\s*(.+))?$")
+CHAPTER_RE = re.compile(rf"^Chapter\s+([IVXLC]+\d*)\s*(?:{DASH}\s*(.+))?$")
 # "Article 4 - Entry into Georgia". The dash is required: it is what separates a
 # real heading from body text such as "Article 15(k) of this Law shall be ...".
-# Amending laws insert articles as superscripts (Article 20 -> Article 20^1).
-ARTICLE_RE = re.compile(r"^Article\s+(\d+[⁰¹²³⁴-⁹]*)\s*[–—-]\s*(.+)$")
+ARTICLE_RE = re.compile(rf"^Article\s+(\d+{SUPERSCRIPTS}*)\s*{DASH}\s*(.+)$")
 
 SUPERSCRIPT_DIGITS = str.maketrans("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")
-SUPERSCRIPT_TO_ASCII = {ord(c): f"-{d}" for d, c in zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹")}
+SUPERSCRIPT_TO_ASCII = {
+    ord(c): f"-{d}" for d, c in zip("0123456789", "⁰¹²³⁴⁵⁶⁷⁸⁹", strict=True)
+}
 
 # Amendment trail printed under each amended article by the official publisher.
 AMENDMENT_RE = re.compile(r"^(?:Law|Decree|Decision|Judgment|Resolution|Order)\b.*\bwebsite\b")
 # Page furniture: the publisher URL and the document registration number.
 FOOTER_RE = re.compile(r"^(?:https?://\S+|\d{10,})$")
 
-# A new logical paragraph starts at "1." / "a)" / "a1)" markers; every other line
-# is a hard wrap continuing the paragraph above it.
+# A new logical paragraph starts at "1." / "a)" / "a1)"; every other line is a
+# hard wrap continuing the one above.
 PARAGRAPH_START_RE = re.compile(r"^(?:\d+\s*\d*\.|[a-z]\d?\)|[a-z]\d?\.)\s")
 
 
@@ -71,9 +77,8 @@ SUPERSCRIPT_FLAG = 1  # bit 0 of a span's `flags` marks superscript text
 def _read_lines(pdf_path: Path) -> list[tuple[int, str]]:
     """Return ``(page_number, line)`` pairs with noise and NBSPs removed.
 
-    Read span-by-span rather than as flat text so superscripts survive: the law
-    numbers inserted articles as "Article 20^1", and flattening that to
-    "Article 201" would have the assistant cite an article that does not exist.
+    Read span-by-span rather than as flat text so superscripts survive: flat
+    extraction turns "Article 20^1" into a nonexistent "Article 201".
     """
     lines: list[tuple[int, str]] = []
     with pymupdf.open(pdf_path) as doc:
@@ -93,31 +98,44 @@ def _read_lines(pdf_path: Path) -> list[tuple[int, str]]:
     return lines
 
 
-def _join_paragraphs(lines: list[str]) -> list[str]:
-    """Undo the PDF's hard line wrapping, restoring logical paragraphs."""
-    paragraphs: list[str] = []
-    for line in lines:
+def _join_paragraphs(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
+    """Undo the PDF's hard line wrapping, restoring logical paragraphs.
+
+    Each paragraph keeps the page its first line appeared on.
+    """
+    paragraphs: list[tuple[int, str]] = []
+    for page, line in lines:
         if not paragraphs or PARAGRAPH_START_RE.match(line):
-            paragraphs.append(line)
+            paragraphs.append((page, line))
         else:
-            paragraphs.append(f"{paragraphs.pop()} {line}")
+            first_page, text = paragraphs.pop()
+            paragraphs.append((first_page, f"{text} {line}"))
     return paragraphs
 
 
-def _split_parts(paragraphs: list[str], max_chars: int) -> list[str]:
-    """Group paragraphs into parts of at most ``max_chars``, never splitting one."""
-    parts: list[str] = []
+def _split_parts(
+    paragraphs: list[tuple[int, str]], max_chars: int
+) -> list[tuple[int, str]]:
+    """Group paragraphs into parts of at most ``max_chars``, never splitting one.
+
+    Long articles run across pages, so each part reports the page its own text
+    starts on rather than the page the article began on.
+    """
+    parts: list[tuple[int, str]] = []
     current: list[str] = []
+    page = 0
     size = 0
-    for paragraph in paragraphs:
+    for paragraph_page, paragraph in paragraphs:
         if current and size + len(paragraph) > max_chars:
-            parts.append("\n".join(current))
+            parts.append((page, "\n".join(current)))
             current, size = [], 0
+        if not current:
+            page = paragraph_page
         current.append(paragraph)
         size += len(paragraph) + 1
     if current:
-        parts.append("\n".join(current))
-    return parts or [""]
+        parts.append((page, "\n".join(current)))
+    return parts
 
 
 def _document_title(lines: list[tuple[int, str]], fallback: str) -> str:
@@ -142,9 +160,8 @@ def parse_document(pdf_path: Path, max_chunk_chars: int = MAX_CHUNK_CHARS) -> li
     chunks: list[Chunk] = []
     section = chapter = ""
     article_number = article_title = ""
-    body: list[str] = []
+    body: list[tuple[int, str]] = []
     amendments: list[str] = []
-    article_page = 1
 
     def flush() -> None:
         """Emit the article accumulated so far."""
@@ -153,7 +170,7 @@ def parse_document(pdf_path: Path, max_chunk_chars: int = MAX_CHUNK_CHARS) -> li
             body, amendments = [], []
             return
         parts = _split_parts(_join_paragraphs(body), max_chunk_chars)
-        for index, part in enumerate(parts, start=1):
+        for index, (part_page, part) in enumerate(parts, start=1):
             if not part.strip():
                 continue
             suffix = f"::p{index}" if len(parts) > 1 else ""
@@ -168,10 +185,9 @@ def parse_document(pdf_path: Path, max_chunk_chars: int = MAX_CHUNK_CHARS) -> li
                     article=f"Article {article_number}",
                     title=article_title,
                     text=part,
-                    page=article_page,
+                    page=part_page,
                     part=index,
                     n_parts=len(parts),
-                    # The amendment trail belongs to the article as a whole.
                     amendments=list(amendments),
                 )
             )
@@ -203,11 +219,10 @@ def parse_document(pdf_path: Path, max_chunk_chars: int = MAX_CHUNK_CHARS) -> li
         elif article_match := ARTICLE_RE.match(line):
             flush()
             article_number, article_title = article_match.group(1), article_match.group(2)
-            article_page = page
         elif AMENDMENT_RE.match(line):
             amendments.append(line)
         elif article_number:
-            body.append(line)
+            body.append((page, line))
 
         index += 1
 

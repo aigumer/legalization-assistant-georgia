@@ -10,6 +10,8 @@ import groq
 
 from .config import (
     DEFAULT_NUM_RESULTS,
+    MAX_CONTEXT_CHARS,
+    MAX_HISTORY_CHARS,
     MAX_SOURCE_CHARS,
     MAX_TOKENS,
     MODEL,
@@ -52,6 +54,44 @@ Excerpts from Georgian legislation:
 </excerpts>
 
 Question: {question}"""
+
+
+def fit_context(sources: list[dict], budget_chars: int = MAX_CONTEXT_CHARS) -> list[dict]:
+    """Keep the highest-ranked excerpts that fit the prompt's share of the quota.
+
+    Excerpts are ordered by relevance, so the ones dropped are the weakest. This
+    is what makes a large `num_results` safe: the request stays inside the quota
+    instead of being rejected once the retrieved text is long enough.
+    """
+    kept: list[dict] = []
+    size = 0
+    for source in sources:
+        length = min(len(source["text"]), MAX_SOURCE_CHARS)
+        if kept and size + length > budget_chars:
+            break
+        kept.append(source)
+        size += length
+    return kept
+
+
+def trim_history(history: list[dict], budget_chars: int = MAX_HISTORY_CHARS) -> list[dict]:
+    """Keep the most recent whole turns that fit ``budget_chars``.
+
+    Dropping the oldest turns first keeps the follow-up context that matters
+    while stopping the prompt from growing with every message.
+    """
+    kept: list[dict] = []
+    size = 0
+    for message in reversed(history):
+        size += len(message["content"])
+        if size > budget_chars:
+            break
+        kept.append(message)
+    kept.reverse()
+    # A leading assistant turn is an answer whose question was just dropped.
+    if kept and kept[0]["role"] != "user":
+        kept.pop(0)
+    return kept
 
 
 def format_context(sources: list[dict]) -> str:
@@ -127,7 +167,12 @@ def retrieve(
     translate: bool = True,
 ) -> list[dict]:
     query = prepare_query(question, translate=translate)
-    return get_search().search(query, num_results=num_results, boosts=boosts, doc_id=doc_id)
+    results = get_search().search(
+        query, num_results=num_results, boosts=boosts, doc_id=doc_id
+    )
+    # Trim here rather than at prompt assembly, so the excerpts shown in the UI
+    # are exactly the ones the answer was grounded in.
+    return fit_context(results)
 
 
 def build_messages(
@@ -137,7 +182,7 @@ def build_messages(
 ) -> list[dict]:
     """Prior turns as plain text, with the excerpts attached to the current question."""
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages.extend(history or [])
+    messages.extend(trim_history(history or []))
     messages.append(
         {
             "role": "user",

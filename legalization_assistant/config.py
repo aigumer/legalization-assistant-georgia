@@ -9,7 +9,6 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
-# Pick up ANTHROPIC_API_KEY (and any overrides below) from a local .env file.
 load_dotenv(PROJECT_ROOT / ".env")
 
 RAW_DIR = PROJECT_ROOT / "data" / "raw"
@@ -17,17 +16,12 @@ PROCESSED_DIR = PROJECT_ROOT / "data" / "processed"
 CHUNKS_PATH = PROCESSED_DIR / "chunks.json"
 GROUND_TRUTH_PATH = PROCESSED_DIR / "ground_truth.csv"
 
-# Articles longer than this are split into parts on paragraph boundaries, so a
-# single retrieved chunk stays focused enough to be a useful search unit.
+# Articles longer than this are split into parts on paragraph boundaries.
 MAX_CHUNK_CHARS = 2000
 
-# Retrieval defaults. Article titles carry the topical words a user actually
-# types ("residence permit", "visa"), so they are boosted over body text. These
-# weights come from scripts/evaluate_retrieval.py --sweep: boosting `chapter` as
-# well hurt, because chapter headings match every article beneath them.
 DEFAULT_NUM_RESULTS = 5
-# At most this many parts of the same article may occupy result slots, so a long
-# article cannot crowd out every other article bearing on the question.
+# Parts of one article that may occupy result slots, so a long article cannot
+# crowd out the others.
 MAX_PARTS_PER_ARTICLE = 2
 OVERFETCH_FACTOR = 4
 DEFAULT_BOOSTS = {
@@ -38,15 +32,26 @@ DEFAULT_BOOSTS = {
 }
 
 MODEL = os.getenv("LEGAL_ASSISTANT_MODEL", "openai/gpt-oss-120b")
-# gpt-oss reasons before answering, and reasoning tokens share this budget with
-# the answer text. Groq counts `max_completion_tokens` in full against the
-# tokens-per-minute quota (8,000/min on the free tier) whether or not they are
-# used, so this is deliberately modest: prompt + budget must fit under it.
+# Groq counts `max_completion_tokens` in full against the tokens-per-minute
+# quota, used or not, so prompt + answer budget has to fit inside one minute's
+# worth. Every limit below is derived from that, and `fit_context` and
+# `trim_history` in rag.py hold the prompt to it.
+TOKENS_PER_MINUTE = int(os.getenv("LEGAL_ASSISTANT_TOKENS_PER_MINUTE", "8000"))
 MAX_TOKENS = 3000
-# Cap on any single excerpt, so one very long article cannot blow the budget.
 MAX_SOURCE_CHARS = 2400
 REASONING_EFFORT = os.getenv("LEGAL_ASSISTANT_REASONING_EFFORT", "medium")
 
-# The corpus is English, so a query written in another script cannot match
-# anything. A smaller, faster model turns such queries into English search terms.
+# Rough English average, and deliberately low: the budget guard should
+# over-estimate the prompt rather than under-estimate it.
+CHARS_PER_TOKEN = 4
+# System prompt, the question, and the per-excerpt headers in format_context.
+PROMPT_OVERHEAD_TOKENS = 700
+# Prior turns are replayed on every follow-up, so without a cap the prompt grows
+# until the quota rejects it. Oldest turns are dropped first.
+MAX_HISTORY_CHARS = 4000
+# What is left for retrieved excerpts once everything above is reserved.
+MAX_CONTEXT_CHARS = (
+    TOKENS_PER_MINUTE - MAX_TOKENS - PROMPT_OVERHEAD_TOKENS
+) * CHARS_PER_TOKEN - MAX_HISTORY_CHARS
+
 TRANSLATION_MODEL = os.getenv("LEGAL_ASSISTANT_TRANSLATION_MODEL", "openai/gpt-oss-20b")
