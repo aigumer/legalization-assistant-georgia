@@ -41,8 +41,6 @@ def render_sources(sources: list[dict]) -> None:
 
 
 def main() -> None:
-    # get_search caches the index process-wide, so the spinner shows only while
-    # the first run actually builds it.
     with st.spinner("Building the search index..."):
         index = get_search()
 
@@ -111,7 +109,6 @@ def main() -> None:
     with st.chat_message("user"):
         st.markdown(question)
 
-    # Follow-up turns carry the plain text only, not each turn's excerpts.
     history = [
         {"role": message["role"], "content": message["content"]}
         for message in st.session_state.messages

@@ -1,11 +1,12 @@
 # Georgia Visa & Legalization Assistant
 
 A retrieval-augmented Q&A app for questions about visas, residence permits, and the
-legal status of foreigners in Georgia. Questions are answered **only** from indexed
+legal status of foreigners in Georgia. Questions are answered only from indexed
 Georgian legislation, and every answer cites the articles it relies on.
 
-Built along the lines of the [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp)
-project structure: ingestion → retrieval → RAG → evaluation → UI.
+Build as final project of [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp). 
+
+Project structure: ingestion → retrieval → RAG → evaluation → UI.
 
 ![architecture](docs/architecture.svg)
 
@@ -178,9 +179,6 @@ docker-compose.yml         app service + `tools`-profile one-shots
 ## Limitations
 
 - **One law indexed.** It covers entry, visas, residence permits, rights and duties,
-  and expulsion, but not the government ordinances that carry much of the day-to-day
-  detail (visa fee schedules, country lists, application forms).
-- **Point-in-time text.** The PDF is a snapshot; the law changes. Amendment dates are
-  shown so a stale answer is at least visible as stale.
-- Not legal advice. Confirm anything consequential with the Public Service Development
-  Agency or a qualified lawyer.
+  and expulsion, need to add more documents to answer all possible questions.
+- **TO-DO** The PDF should be updated automatically because the law changes. 
+- **Not legal advice** Confirm anything consequential with the PSDA or a qualified lawyer.
