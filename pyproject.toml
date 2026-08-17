@@ -1,10 +1,19 @@
 [project]
 name = "legalization-assistant-georgia"
 version = "0.1.0"
-description = "Add your description here"
+description = "RAG assistant for questions about visas and legalization in Georgia"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "groq>=1.6.0",
+    "minsearch>=0.2.0",
     "pymupdf>=1.28.2",
+    "python-dotenv>=1.2.3",
+    "streamlit>=1.61.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipykernel>=7.3.0",
     "pypdf>=6.16.1",
 ]
