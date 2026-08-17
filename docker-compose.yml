@@ -1,0 +1,30 @@
+x-model-env: &model-env
+  GROQ_API_KEY: ${GROQ_API_KEY:?set GROQ_API_KEY in .env (see .env.example)}
+  LEGAL_ASSISTANT_MODEL: ${LEGAL_ASSISTANT_MODEL:-openai/gpt-oss-120b}
+  LEGAL_ASSISTANT_TRANSLATION_MODEL: ${LEGAL_ASSISTANT_TRANSLATION_MODEL:-openai/gpt-oss-20b}
+  LEGAL_ASSISTANT_REASONING_EFFORT: ${LEGAL_ASSISTANT_REASONING_EFFORT:-medium}
+  LEGAL_ASSISTANT_TOKENS_PER_MINUTE: ${LEGAL_ASSISTANT_TOKENS_PER_MINUTE:-8000}
+
+services:
+  app:
+    build: .
+    image: legalization-assistant-georgia
+    ports:
+      - "${APP_PORT:-8501}:8501"
+    environment: *model-env
+    restart: unless-stopped
+
+  evaluate:
+    build: .
+    image: legalization-assistant-georgia
+    profiles: ["tools"]
+    environment: *model-env
+    command: ["python", "scripts/evaluate_retrieval.py", "--sweep"]
+
+  #   docker compose run --rm ask "How long is a residence permit valid?"
+  ask:
+    build: .
+    image: legalization-assistant-georgia
+    profiles: ["tools"]
+    environment: *model-env
+    entrypoint: ["python", "scripts/ask.py"]

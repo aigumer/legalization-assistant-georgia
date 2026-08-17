@@ -1,0 +1,22 @@
+# Never let the real API key into an image layer.
+.env
+
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.py[oc]
+.pytest_cache/
+.ruff_cache/
+.claude/
+
+# Rebuilt inside the image from data/raw, so it stays in step with the parser.
+data/processed/
+
+# Not needed at runtime.
+notebook.ipynb
+tests/
+docs/
+Dockerfile
+.dockerignore
+docker-compose.yml

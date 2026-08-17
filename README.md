@@ -5,10 +5,7 @@ legal status of foreigners in Georgia. Questions are answered **only** from inde
 Georgian legislation, and every answer cites the articles it relies on.
 
 Built along the lines of the [LLM Zoomcamp](https://github.com/DataTalksClub/llm-zoomcamp)
-project structure: ingestion → retrieval → RAG → evaluation → UI, with
-[minsearch](https://github.com/alexeygrigorev/minsearch) for retrieval,
-[Groq](https://console.groq.com/) (`openai/gpt-oss-120b`) for generation, and
-Streamlit for the frontend.
+project structure: ingestion → retrieval → RAG → evaluation → UI.
 
 ![architecture](docs/architecture.svg)
 
@@ -35,13 +32,7 @@ the fact that the corpus is already structured as Section → Chapter → Articl
 
 - **One chunk per article**, so a retrieved passage is a citable legal unit rather
   than an arbitrary window. Long articles are split on paragraph boundaries only
-  (`MAX_CHUNK_CHARS`), and each part keeps its article heading and metadata —
-  including the page its own text starts on, since 38 of the 93 articles run
-  across a page break.
-- **Superscript-aware.** Amending laws insert articles as `Article 20¹`. Flat text
-  extraction turns that into `Article 201` — an article that does not exist. Chunks
-  are built span-by-span so the superscript survives in both headings and
-  cross-references.
+  (`MAX_CHUNK_CHARS`).
 - **Noise stripped**: page footers, publisher URLs, and document numbers. Amendment
   trails ("Law of Georgia No 1803 of 25 June 2026") are pulled out of the body into an
   `amendments` field and shown as "last amended" in the UI.
@@ -64,15 +55,10 @@ Three things on top of a plain index, all of which came out of measurement:
   `MAX_PARTS_PER_ARTICLE` (2) parts of the same article may occupy results; the search
   over-fetches and filters.
 - **Statutory synonyms.** The law says *expulsion*, never *deportation*; *alien*, never
-  *foreigner*; *visa categories*, never *visa types*. A keyword index cannot bridge
-  that, so everyday terms have their statutory equivalents appended to the query
-  (`STATUTORY_SYNONYMS` in `search.py`). "What types of visas are there?" only reaches
-  Article 7 with this on.
+  *foreigner*; *visa categories*, never *visa types*. 
 
 Questions in a non-Latin script (Russian, Georgian) cannot match an English index at
-all, so they are first rewritten into English search terms by `gpt-oss-20b` at
-`temperature=0` — non-deterministic rewrites made retrieval wobble run to run.
-Latin-script questions skip that call entirely, so the common path costs nothing extra.
+all, so they are first rewritten into English search terms by `gpt-oss-20b`.
 
 ## RAG flow
 
@@ -81,9 +67,6 @@ and amendment date, then passed to `openai/gpt-oss-120b` on Groq under a system 
 that requires it to answer only from the excerpts, cite articles inline, surface
 conditions and exceptions rather than the bare general rule, say plainly when the
 excerpts do not cover the question, and answer in the user's language.
-
-gpt-oss returns its chain of thought in a separate `reasoning` field, so the streamed
-`content` deltas are answer text alone and go straight to the UI with no filtering.
 
 Follow-up turns carry only the plain question/answer text, not each turn's excerpts.
 That slows the prompt's growth but does not stop it, so history is also capped at
@@ -115,16 +98,40 @@ uv run python scripts/evaluate_retrieval.py --sweep
 The default configuration retrieves the correct article for 34 of 35 questions, usually
 at rank 1. Over-boosting titles (×8) or boosting chapters both make it worse.
 
-One honest caveat on these numbers: the seed questions are written in fairly statutory
-vocabulary, so they under-represent how people actually ask. Synonym expansion costs a
-little MRR here (0.846 → 0.832) while fixing colloquial questions the seed set does not
-contain — that trade is why it is on by default.
-
 ## Running it
+
+Either way, start by putting a Groq API key in `.env`:
+
+```bash
+cp .env.example .env          # then add your GROQ_API_KEY
+```
+
+### With Docker
+
+```bash
+docker compose up
+```
+
+The app is then on <http://localhost:8501>. Compose reads the same `.env`, so the
+key is passed in as an environment variable and never baked into the image. Two
+one-shot commands run against the same image, behind a `tools` profile so
+`docker compose up` starts only the app:
+
+```bash
+docker compose run --rm evaluate
+docker compose run --rm ask "How long is a residence permit valid?"
+```
+
+The image installs from `uv.lock` with `--frozen`, so it gets the exact versions
+these evaluation numbers were measured on, and it parses the PDFs at build time —
+the corpus ships inside the image, and a parser error fails the build rather than
+the running app. Adding a PDF to `data/raw/` therefore needs a `docker compose
+build`. Override the port with `APP_PORT=8600 docker compose up` if 8501 is taken.
+
+### Without Docker
 
 ```bash
 uv sync
-cp .env.example .env          # then add your GROQ_API_KEY
 uv run python scripts/prepare_data.py
 uv run streamlit run app.py
 ```
@@ -161,6 +168,8 @@ scripts/
 data/
   raw/                     source PDFs
   ground_truth_seed.csv    hand-written evaluation set
+Dockerfile                 app image, corpus baked in at build time
+docker-compose.yml         app service + `tools`-profile one-shots
 ```
 
 ## Limitations
